@@ -1,0 +1,90 @@
+---
+title: "Practical Machine Learning Project"
+author: "Daniel Sia"
+date: "Sunday, January 25, 2015"
+output: html_document
+---
+
+The objective of the assignment is to predict the manner in which the subjects did the exercise, ie the classe variable (which has 5 levels A, B, C, D and E).
+I loaded the dataset and the required libraries.
+
+```{r}
+library(ggplot2)
+library(kernlab)
+library(AppliedPredictiveModeling)
+library(caret)
+library(randomForest)
+library(rpart)
+library(gbm)
+
+training <- read.csv("pml-training.csv")
+testing <- read.csv("pml-testing.csv")
+
+```
+
+##Cleaning of data
+
+I then looked at the dataset, cleaning it to include only variables with fewer missing values. If a variable had more than 90% missing values, I excluded it. I obtained 59 variables as a result. 
+
+```{r, warning=FALSE}
+##dealing with missing values, remove variables with many missing values
+nsv<-nearZeroVar(training, saveMetrics=TRUE)
+nzv <- which(nsv[,4]==TRUE)
+training <- training[,-nzv]
+testing <- testing[,-nzv]
+training <- subset(training, select=-c(max_roll_belt, max_picth_belt, min_roll_belt, min_pitch_belt, amplitude_roll_belt, amplitude_pitch_belt, var_total_accel_belt, avg_roll_belt, stddev_roll_belt, var_roll_belt, avg_pitch_belt, stddev_pitch_belt, var_pitch_belt, avg_yaw_belt, stddev_yaw_belt, var_yaw_belt, var_accel_arm, max_picth_arm, max_yaw_arm, min_yaw_arm, amplitude_yaw_arm, max_roll_dumbbell, max_picth_dumbbell, min_roll_dumbbell, min_pitch_dumbbell, amplitude_roll_dumbbell, amplitude_pitch_dumbbell, var_accel_dumbbell, avg_roll_dumbbell, stddev_roll_dumbbell, var_roll_dumbbell, avg_pitch_dumbbell, stddev_pitch_dumbbell, var_pitch_dumbbell, avg_yaw_dumbbell, stddev_yaw_dumbbell, var_yaw_dumbbell, max_picth_forearm, min_pitch_forearm, amplitude_pitch_forearm, var_accel_forearm))
+testing <- subset(testing, select=-c(max_roll_belt, max_picth_belt, min_roll_belt, min_pitch_belt, amplitude_roll_belt, amplitude_pitch_belt, var_total_accel_belt, avg_roll_belt, stddev_roll_belt, var_roll_belt, avg_pitch_belt, stddev_pitch_belt, var_pitch_belt, avg_yaw_belt, stddev_yaw_belt, var_yaw_belt, var_accel_arm, max_picth_arm, max_yaw_arm, min_yaw_arm, amplitude_yaw_arm, max_roll_dumbbell, max_picth_dumbbell, min_roll_dumbbell, min_pitch_dumbbell, amplitude_roll_dumbbell, amplitude_pitch_dumbbell, var_accel_dumbbell, avg_roll_dumbbell, stddev_roll_dumbbell, var_roll_dumbbell, avg_pitch_dumbbell, stddev_pitch_dumbbell, var_pitch_dumbbell, avg_yaw_dumbbell, stddev_yaw_dumbbell, var_yaw_dumbbell, max_picth_forearm, min_pitch_forearm, amplitude_pitch_forearm, var_accel_forearm))
+
+```
+
+##Exploratory Data Analysis
+
+I then did some exploratory data analysis with the cleaner dataset, so as to observe any possible trends or patterns. Some of the plots are given below.
+
+```{r, echo=FALSE}
+plot(training$pitch_forearm,col=training$classe)
+qplot(accel_dumbbell_y, accel_dumbbell_z, colour=classe,data=training)
+qplot(pitch_forearm, pitch_dumbbell, colour=classe,data=training)
+```
+
+##Cross Validation
+
+As can be observed from these selected plots, there seems to be no discernible pattern through eyeballing. Thus for cross validation purposes, I divided the training set into 75% training and 25% validation using the rule of thumb provided in the lectures.
+
+```{r, warning=FALSE}
+##cross validation
+intrain <- createDataPartition(training[,"classe"], p = .75)[[1]] 
+train <- training[intrain,]
+cv <- training[-intrain,]
+```
+
+##Model used for prediction purposes
+
+The model I run is stochastic gradient boosting with trees, since it produces more accurate results. The tradeoff is that the the results may not be as intepretable, though this is not a concern here since the main objective is for prediction purposes for the testing dataset. Another concern is that there may be overfitting of the data. This will be explored further later. 
+
+The results are given below.
+
+```{r, warning=FALSE}
+modelfit <- train(classe ~ ., data=train, method="gbm", distribution="multinomial", verbose=FALSE)
+print(modelfit)
+```
+
+## Accuracy of model on training set
+
+```{r, warning=FALSE}
+predicttrain <- predict(modelfit,train)
+confusionMatrix(train$classe, predicttrain)
+```
+
+The accuracy of the model seems to be very high since 100% of observations were correctly classified, suggesting an extremely low in sample error rate of about 0%. This is expected since we build the model using the training set.
+
+## Estimation of out of sample error rate on cross validation set
+
+I test the model on the cross-validation set to obtain an estimate of the out of sample error rate. 
+
+```{r}
+predictcv <- predict(modelfit, cv)
+confusionMatrix(cv$classe, predictcv)
+```
+
+As before, accuracy appears to be very high since 99.9% of observations were correctly classified. Based on the cross-validation set, I estimate that the out of sample error rate should be about 0.1%.
